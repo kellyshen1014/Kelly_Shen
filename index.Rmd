@@ -1,0 +1,134 @@
+---
+title: "China's two-child policy: a rule, not a pill"
+author: "Kelly Shen & Jinghan Gao"
+date: "12.20.2018"
+output:
+  html_document:
+    code_folding: hide
+    highlight: tango
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+    df_print: kable
+---
+
+<!--
+Comments in HTML are like this! 
+-->
+
+# Intro
+```{r, message=FALSE, warning = FALSE}
+#Load all the packages and datasets
+
+#Please delete the comments below 
+#to install the packages for visualization 
+library(viridis)
+library(rvest)
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(tidyr)
+library(RColorBrewer)
+library(leaflet.minicharts)
+library(wesanderson)
+library(ggsci)
+library(ggrepel)
+#install.packages('viridis', type='source')
+#install.packages('rvest', type='source')
+#install.packages("rvest")
+#install.packages('tidyverse')
+#install.packages('leaflet.minicharts')
+#install.packages('wesanderson', type='source')
+#install.packages('leaflet.minicharts', type='source')
+#install.packages('ggsci', type='source')
+#install.packages("ggrepel")
+
+#read all the necessary datasets 
+
+#Contains the geographic information about
+#of provinces in China
+Province <- sf::read_sf("gadm36_CHN_1.shp") %>%
+  select(Region = NAME_1, geometry)
+
+#The geometry of capitals in each province
+capital <- read.csv("Capital.csv",encoding="UTF-8")
+#split the geometry column into lat and lon columns 
+capitalNew <- capital %>% 
+  #first remove the parentheses and degree symbol
+  mutate(Geom = gsub('[()°c]', '', geometry)) %>% 
+  #separate the Geom column into new Latitude 
+  #and Longitude columns with a comma separator
+  separate(col = Geom, into = c('Lat', 'Long'), sep = '\\,') %>%
+  rename(Region = Province, Capital = Region)
+
+#Annual birth rate in each province over the past 10 years
+birthrate_annual <- read.csv("AnnualbyProvince.csv")
+#Number of kindargartens in each province 
+kindergarton_annual <- read.csv("EdubyProvince.csv")
+
+```
+
+```{r, message=FALSE, warning = FALSE}
+#Join two datasets for the display on the map 
+new <- Province %>% 
+  inner_join(birthrate_annual, by = "Region")  
+Edu <- capitalNew %>%
+  inner_join(kindergarton_annual, by = "Region") 
+
+#calculate the birthrate change between 2013 and 2016 to examine the 
+#effectiveness of the two-child policy
+changerate <- new %>% 
+  mutate(cr = ((X2016-X2013)/(X2013)) * (100)) %>% 
+  #Since the rate has too many digits, then rounded it with 2 significant num.
+  mutate(change_in_birth_rate= signif(cr, digits = 2)) %>%
+  # select desired columns
+  select(geometry, change_in_birth_rate , Region) %>%
+  arrange(desc(change_in_birth_rate)) %>%
+  #Add centroids to each region using purrr package
+  mutate(
+    lon = purrr::map_dbl(geometry, ~sf::st_centroid(.x)[[1]]),
+    lat = purrr::map_dbl(geometry, ~sf::st_centroid(.x)[[2]])
+    )
+```
+
+  “Please have another baby.” China is “sending out” the message for couples after long decades of restricting families to just one child. As the most populous country in the world, China had been implemented its famous one-child policy since 1979, and the purpose was to make sure population growth did not outpace economic development. While effectively maintaining a low population growth, after 36 years of implementation, it also brings some salient problems such as an ageing population and a shrinking workforce. So in 2014, government announced that the one-child policy had finally been replaced by a universal two-child policy.^[Zeng, Yi and Therese Hesketh. “The effects of China's universal two-child policy” Lancet (London, England) vol. 388,10054 (2016): 1930-1938. (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5944611/] However, the release of the new policy seemed to be not hugely welcomed by its people. 
+  
+
+  By exploring population datasets from National Bureau of Statistics of China and combining it with the Chinese administrative boundary shapefile from The Humanitarian Data Exchange, we are trying to examine the effectiveness of the new two child policy and the social reasons behind its unexpected outcome. The following static map was based on the data of annual birth rate of China which displays the change of birth rate in each province from 2014 to 2016. The color palette represents the degree of the change: we can see that despite the policy incentives, most of the areas are under blue, indicating that the operation of two child policy does not make a great difference to most of the provinces in China. Southern Provinces such as Guangdong and Henan outperformed the northern areas in China as they have relatively larger populations. One noticeable area is Shandong province, which is the only red place on the map, and its birth rate increased more than 50 percent over the past three years. According to the China Daily news, as Shandong had implemented strict family planning before, so its great potential may be unleashed after relaxation of the one-child policy.^[Hong, Meng. “Shandong Couples Most Willing to Have Second Child, Statistics Show.” China News Service Website - Headlines, Stories, Photos and Videos, (www.ecns.cn/cns-wire/2017/04-26/255102.shtml.]
+
+
+```{r, message=FALSE, warning = FALSE}
+#Static Map
+#Explore the color palettes from Wes Anderson movies
+#I choose the zissou1 palette since it features the contrast color of red and blue that
+#can best represent the increase and drop of birthrate change in China 
+pal <- wes_palette("Zissou1", 50, type = "continuous")
+ggplot(changerate) +
+  geom_sf(aes(fill = change_in_birth_rate))+
+  #adopt the gradient color
+  scale_fill_gradientn(colours = pal)+
+  #I use the text_repel package to avoid the overlapping labels
+  geom_text_repel(data = changerate, 
+                  aes(x=lon, y=lat, label = Region),
+                  #smaller label size 
+                  size = 3,
+                  segment.color = "white",
+                  #Set point.padding = NA to prevent
+                  #Label repulsion away from data points
+                  point.padding = NA,
+                  #Render the segments as arrows
+                  arrow = arrow(length = unit(0.02, "npc"),
+                                type = "closed", ends = "first"), 
+                  force = 10)+
+  xlab("Longitude")+ 
+  ylab("Latitude")+
+  labs(title = "2013-2016 Change of Birthrate in Provinces of China",
+       caption ="The blue color indicates sagging birth rate change: deeper \nthe blue the less birth rate grow is (even the negative); as\nthe increase in birth rate gets more drastic, the color changes\nfrom subtle blue, yellow, to red.")+
+  #add grids to the background to clearly distinguish them from 
+  #country borders lines and make some adjustment on the background color
+  theme(panel.grid.major = element_line(color = gray(.5),
+                                        linetype = "dashed", size = 0.5),
+        panel.background = element_rect(fill = "aliceblue"))
+```

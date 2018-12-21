@@ -1,0 +1,274 @@
+---
+title: "More information"
+author: "Kelly Shen & Jinghan Gao"
+date: "12.20.2018"
+output:
+  html_document:
+    code_folding: hide
+    highlight: tango
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+    df_print: kable
+---
+
+<!--
+Comments in HTML are like this! 
+-->
+
+```{r, message=FALSE, warning = FALSE}
+#Load all the packages and datasets
+
+#Please delete the comments below 
+#to install the packages for visualization 
+library(viridis)
+library(rvest)
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(tidyr)
+library(RColorBrewer)
+library(leaflet.minicharts)
+library(wesanderson)
+library(ggsci)
+library(ggrepel)
+#install.packages('viridis', type='source')
+#install.packages('rvest', type='source')
+#install.packages('wesanderson', type='source')
+#install.packages('leaflet.minicharts', type='source')
+#install.packages('ggsci', type='source')
+#install.packages("ggrepel")
+```
+
+```{r, message=FALSE, warning = FALSE}
+#read all the necessary datasets 
+
+#Contains the geographic information about
+#of provinces in China
+Province <- sf::read_sf("gadm36_CHN_1.shp") %>%
+  select(Region = NAME_1, geometry)
+
+#The geometry of capitals in each province
+capital <- read.csv("Capital.csv")
+#split the geometry column into lat and lon columns 
+capitalNew <- capital %>% 
+  #first remove the parentheses and degree symbol
+  mutate(Geom = gsub('[()°c]', '', geometry)) %>% 
+  #separate the Geom column into new Latitude 
+  #and Longitude columns with a comma separator
+  separate(col = Geom, into = c('Lat', 'Long'), sep = '\\,') %>%
+  rename(Region = Province, Capital = Region)
+
+#Annual birth rate in each province over the past 10 years
+birthrate_annual <- read.csv("AnnualbyProvince.csv")
+#Number of kindargartens in each province 
+kindergarton_annual <- read.csv("EdubyProvince.csv")
+
+```
+```
+# One child V.S. Two child
+
+Total fertility rate, according to Population Reference Bureau, is defined as “the average number of children a woman would have assuming that current age-specific birth rates remain constant throughout her childbearing years.”^[“Homepage.” Population Reference Bureau, www.prb.org/.] By analyzing and comparing the total fertility rate of women in China for their first and second child, we can approximately estimate the future tendency of the change in Chinese population.  
+
+These two plots below displays the total fertility rate of women for their first child and second child in China from age 15 to 49 during the years of 2011 to 2015 and the datasets are exported from National Bureau of Statistics in China. Each color on this line graph represents years separately from 2011 to 2015, and the x-axis and y-axis exhibit the different age group of women from 15-19 to 45-49 and the total fertility rate for each age interval. Based on graph of the first child on the left, it clearly shows the total fertility rate for all the age groups has a general tendency of decreasing from 2011 till now on. However, the situation for the total fertility rate of women having their second child is the opposite of the first child that after 2011, the fertility rate for every year grows a little more than last year and eventually reached its peak during 2014 and gradually falls back in 2015. 
+
+```{r, message=FALSE, warning = FALSE}
+#Annual fertility rate of first and second child born in China
+fisrt_child <- read.csv("first_child - Annual.csv")
+second_child <- read.csv("second child - Annual.csv")
+
+#Adopt the data from the past five years to see the change  
+#in one child fertility rate change for women in different 
+#age groups
+new_first_child <- fisrt_child %>%
+  filter(Year %in% c(2015, 2014, 2013, 2012, 2011)) %>%
+  #rename the column names to the age groups
+  rename("15-19"="X15.19",
+         "20-24"="X20.24",
+         "25-29"="X25.29",
+         "30-34"="X30.34",
+         "35-39"="X35.39",
+         "40-44"="X40.44",
+         "45-49"="X45.49") %>%
+  #convert the untidy datasets into the tidy version using gather argument
+  gather(key = "age",value = "Fertility_Rate_Per_thousand","15-19":"45-49") 
+
+#using the same methods to process the second dataset that 
+#contains the fertility rates of second child in the past 5 years 
+#to make a comparison with that of first child 
+new_second_child <- second_child %>%
+  filter(Year %in% c(2015, 2014, 2013, 2012, 2011)) %>%
+  rename("15-19"="X15.19",
+         "20-24"="X20.24",
+         "25-29"="X25.29",
+         "30-34"="X30.34",
+         "35-39"="X35.39",
+         "40-44"="X40.44",
+         "45-49"="X45.49") %>%
+  gather(key = "age",value = "Fertility_Rate_Per_thousand","15-19":"45-49")
+```
+
+```{r, message=FALSE, warning = FALSE}
+#Make the legend Year  discrete instead of discrete by adopting factor function
+p1 <- ggplot(new_first_child, aes(x = age, y = Fertility_Rate_Per_thousand, group = factor(Year))) + 
+  #ajust the color and the size of the lines 
+  geom_line(aes(color=factor(Year)),size=1.2)+
+  # Add the turning points at each age group to make the change more salient 
+  geom_point(aes(shape=factor(Year)),color="white", size=2)+
+  theme_dark() +
+  # Use tron palette on dark theme
+  scale_color_tron()+
+  scale_fill_tron()+
+  theme(
+    #Adjust the legend position at the bottom
+    legend.position = "bottom",
+    #change the color of background and legend  
+    panel.background = element_rect(fill = "#2D2D2D"),
+    legend.key = element_rect(fill = "#2D2D2D")
+    )+
+  ggtitle("2011-2015 Single Child Birthrate
+          among different age groups")
+
+#Similar adjustment made as p1
+p2 <- ggplot(new_second_child, aes(x = age, y = Fertility_Rate_Per_thousand, group = factor(Year))) + 
+  geom_line(aes(color=factor(Year)),size=1.2)+
+  geom_point(aes(shape=factor(Year)),color="white", size=2)+
+  theme_dark() +
+  # Use the similar color palettes to make better contrast with the line graph of first child
+  scale_color_tron()+
+  scale_fill_tron()+
+  theme(
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "#2D2D2D"),
+    legend.key = element_rect(fill = "#2D2D2D")
+    )+
+ggtitle("2011-2015 Second Child Birthrate
+          among different age groups")
+
+#Using the gridExtra to arrange the two visualizations on the same line
+gridExtra::grid.arrange(p1, p2, nrow = 1)
+```
+
+# Policy & Concerns for Education   
+
+For the interactive map, we exported the annual data of total number of Kindergartens and primary schools of each province from National Bureau of Statistics in China. By utilizing the contrast color, red and blue, we aim to represent corresponding positive and negative birth rate change in different provinces after implementation of the policy with an additional layer of the number of kindergartens and primary schools per province where the size of the circle indicates how large the number is. We intend to investigate whether the Chinese government prepared the families for second child born by providing more affordable services and publicly funded child-care facilities to cope with changes in demographics. However, as we can see on this map that despite provinces around the Beijing district that are economically better-off, the overall situation in China is not ready for a baby boom that most of the provinces only have 10,000 kindergartens or below. For the areas of negative birth rate, such as northern part of China where exist a larger proportion of the rural population, the number of pre-school and primary education facilities are even below 4000. 
+
+^[Unlike many European countries that adopt generous family-friendly policies to encourage fertility and facilitate work-family balance], the Chinese government no longer provides welfare benefits such as child-care subsidies. Therefore, we think this suboptimal construction of the educational infrastructure could be one of the factors for this much lowerer birth rate than expected that people don’t have sufficient confidence to raise up a second child. We also found that in provinces like Shandong and Henan that are the most active about having a second child, government did not increase the public funding and build new primary schools to support the relaxed birth control policy. It may also pose the significant problem of overwhelming pressure of schooling and result in surging child-care expenses. 
+
+This year, however, according to the Education Ministry, the government will support the building of kindergartens by spending more money on new public kindergartens and expanding “^[existing ones in rural areas, less-developed regions, suburbs and regions where demand increases because of the second child policy.]”
+
+Xinhua. “China to Increase Public Spending on Preschool Education.” Chinese Music Traveling Wide, english.gov.cn/state_council/ministries/2018/01/23/content_281476023435502.htm.
+
+```{r, message=FALSE, warning = FALSE}
+#Join two datasets for the display on the map 
+new <- Province %>% 
+  inner_join(birthrate_annual, by = "Region")  
+Edu <- capitalNew %>%
+  inner_join(kindergarton_annual, by = "Region") 
+
+#calculate the birthrate change between 2013 and 2016 to examine the 
+#effectiveness of the two-child policy
+changerate <- new %>% 
+  mutate(cr = ((X2016-X2013)/(X2013)) * (100)) %>% 
+  #Since the rate has too many digits, then rounded it with 2 significant num.
+  mutate(change_in_birth_rate= signif(cr, digits = 2)) %>%
+  # select desired columns
+  select(geometry, change_in_birth_rate , Region) %>%
+  arrange(desc(change_in_birth_rate)) %>%
+  #Add centroids to each region using purrr package
+  mutate(
+    lon = purrr::map_dbl(geometry, ~sf::st_centroid(.x)[[1]]),
+    lat = purrr::map_dbl(geometry, ~sf::st_centroid(.x)[[2]])
+    )
+```
+
+
+```{r, message=FALSE, warning = FALSE}
+#Filter the dataset to distinguish the areas 
+#that has decreasing or increasing birth rate
+#This is for interactive map
+changerate_pos <- changerate %>%
+  filter(change_in_birth_rate>0)
+changerate_neg <- changerate %>%
+  filter(change_in_birth_rate<0)
+
+#Using two different color palette to differentiate the increase 
+#and drop birth rate with red and blue 
+pop_pal1 <- colorQuantile("Reds", domain =changerate_pos$change_in_birth_rate, alpha = FALSE)
+pop_pal2 <- colorQuantile("Blues", n= 5, domain = changerate_neg$change_in_birth_rate)
+
+#add the base map and different map choices 
+leaflet() %>% addTiles(group = "OSM") %>% 
+  addProviderTiles("CartoDB", group = "Carto") %>% 
+  addProviderTiles("Esri", group = "Esri") %>%
+  #add the polygons for provinces that have positive change in birth rate 
+  addPolygons(data = changerate_pos, 
+              fillColor = ~pop_pal1(change_in_birth_rate),
+              #color weight
+              weight =3,
+              fillOpacity = 0.7,
+              #add the white boundary for each province 
+              color = "white",
+              dashArray = "3",
+              label = ~paste0(Region," ","Birth rate change: ",change_in_birth_rate,"%"),
+              group = "Provinces that have increased Birth Rate",
+              #highlight function is able to emphasize the currently moused-over polygon
+              highlight = highlightOptions(
+                weight = 5,
+                color = "#666",
+                dashArray = "",
+                fillOpacity = 0.7,
+                bringToFront = TRUE)) %>%
+  #add the polygons for provinces that have decreased birth rates
+  #the same display formats as commented before 
+  addPolygons(data = changerate_neg, 
+              fillColor = ~pop_pal2(change_in_birth_rate),
+              weight =3,
+              fillOpacity = 0.7,
+              color = "white",
+              dashArray = "3",
+              label = ~paste0(Region," ","Birth_rate_change:",change_in_birth_rate,"%"),
+              group = "Provinces that have decreased Birth Rate",
+              highlight = highlightOptions(
+                weight = 5,
+                color = "#666",
+                dashArray = "",
+                fillOpacity = 0.7,
+                bringToFront = TRUE)) %>%
+  #I explored and adopted the new function in the leaflet that is to add minicharts
+  #in the interactive map to show the number of kindargartens in each province in a 
+  #direct and consise way 
+  #It automatically represents it with circle which area is proportional to the 
+  #corresponding num of schools
+    addMinicharts(Edu$Lat, Edu$Long,
+                  chartdata = Edu$X2016,
+                  showLabels = TRUE,
+                  #smaller width to avoid the overlap 
+                  width = 30) %>%
+  #add the control of layers that allow the users to see the provinces with pos or neg
+  #birth rates 
+  addLayersControl(baseGroups = c("OSM", "Carto", "Esri"), 
+                   overlayGroups = c("Provinces that have increased Birth Rate", 
+                                     "Provinces that have decreased Birth Rate"))
+```
+
+# Conclusion 
+By studying these four data visualizations we can see that even though the Chinese government decides to abolish the one child policy and strongly encourage women to have another child, people are still not buying it due to a lot of realistic reasons such as the imperfect educational infrastructure and increasingly intense pressure on the expense for housing, schooling, nursing elders. As a result, we belived that the policy of population control should never be treated as a pill in the hope of curing the future problems and imbalances. Meanwhile, the government should be supportive in increasing spending on education, health care, employment and housing to cope with changes in demographics.
+
+##Reference
+* [Hong, Meng. “Shandong Couples Most Willing to Have Second Child, Statistics Show.” China News Service Website - Headlines, Stories, Photos and Videos], (www.ecns.cn/cns-wire/2017/04-26/255102.shtml.) {target="_blank"}
+
+* [Zeng, Yi and Therese Hesketh. “The effects of China's universal two-child policy” Lancet (London, England) vol. 388,10054 (2016): 1930-1938.] (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5944611/)
+{target="_blank"}
+
+* [Birth Rate, Death Rate, Natural Growth Rate, National Bureau of Statistics of China] (http://data.stats.gov.cn/english/easyquery.htm?cn=E0103){target="_blank"}
+
+* Number of Regular Primary schools and Kindargartons 
+(http://data.stats.gov.cn/english/easyquery.htm?cn=E0103){target="_blank"}
+
+* China administrative level 0-2 boundaries and gazetteer
+(https://data.humdata.org/dataset/china-administrative-boundaries){target="_blank"}
+
+* [Population Reference Bureau],(www.prb.org/.){target="_blank"}
